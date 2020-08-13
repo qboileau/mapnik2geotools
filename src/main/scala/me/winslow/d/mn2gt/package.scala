@@ -14,7 +14,7 @@ package object mn2gt {
    * {code}
    */
   def attsToParams(e: Elem): Seq[Node] =
-    e.attributes.asAttrMap.map({ case (k, v) => 
+    e.attributes.asAttrMap.map{ case (k, v) =>
       <CssParameter name={k}>{v}</CssParameter>
-    })(collection.breakOut)
+    }.toSeq
 }

@@ -1,21 +1,27 @@
 package me.winslow.d.mn2gt
 
-import org.specs._
-import specification.PendingUntilFixed
+import org.specs2._
+
 import scala.xml._
 import Mapnik2GeoTools._
 
-object Mapnik2GeoToolsSpec extends Specification with PendingUntilFixed {
-  "osm.xml should work" in {}
+import scala.xml.NodeSeq.seqToNodeSeq
 
-  {
+object Mapnik2GeoToolsSpec extends mutable.Specification {
+
+  implicit class NodeOps(val node: Node) extends AnyVal {
+    def mustXML_==(node2: Node) =
+      Utility.trimProper(node) must_== Utility.trimProper(node2)
+  }
+
+  "osm.xml should work" in {
     val tx = new transform.RuleTransformer(LineSymTransformer, RuleCleanup)
     "support patterns" in {
       val transformed =
         tx(<LinePatternSymbolizer file="symbols/chair_lift.png"></LinePatternSymbolizer>)
 
       transformed.label must_== "LineSymbolizer"
-    } pendingUntilFixed
+    }.pendingUntilFixed
 
     "expand stroke colors" in {
       "short hex" >> {
@@ -25,8 +31,8 @@ object Mapnik2GeoToolsSpec extends Specification with PendingUntilFixed {
                 <CssParameter name="stroke">#888</CssParameter>
 	          </LineSymbolizer>
 	        )
-	
-	      shorthex must \\(<CssParameter name="stroke">#888888</CssParameter>)
+
+        (shorthex \\ "CssParameter").text must_== "#888888"
       }
 
       "named color" >> {
@@ -36,8 +42,8 @@ object Mapnik2GeoToolsSpec extends Specification with PendingUntilFixed {
                 <CssParameter name="stroke">salmon</CssParameter>
               </LineSymbolizer>
 	        )
-	
-	      namedcolor must \\(<CssParameter name="stroke">#fa8072</CssParameter>)
+
+        (namedcolor \\ "CssParameter").text must_== "#fa8072"
       }
       
       "rgb" >> {
@@ -47,8 +53,8 @@ object Mapnik2GeoToolsSpec extends Specification with PendingUntilFixed {
                 <CssParameter name="stroke">rgb(10,0,255)</CssParameter>
               </LineSymbolizer>
 	        )
-	
-	      rgb must \\(<CssParameter name="stroke">#0a00ff</CssParameter>)
+
+        (rgb \\ "CssParameter").text must_== "#0a00ff"
       }
     }
 
@@ -60,14 +66,14 @@ object Mapnik2GeoToolsSpec extends Specification with PendingUntilFixed {
           </LineSymbolizer>
         )
 
-      transformed must \\(<CssParameter name="stroke-dasharray">2 2</CssParameter>)
+      (transformed \\ "CssParameter").text must_== "2 2"
     }
 
     "extract CssParameters from attributes" in {
       val transformed =
         tx(<LineSymbolizer stroke="#b4b4b4" stroke-width="0.5"/>)
 
-      transformed must ==/(
+      transformed mustXML_== (
         <LineSymbolizer>
           <Stroke>
             <CssParameter name="stroke">#b4b4b4</CssParameter>
@@ -81,7 +87,15 @@ object Mapnik2GeoToolsSpec extends Specification with PendingUntilFixed {
   {
     val tx = new transform.RuleTransformer(PointSymTransformer)
     "not require a 'type' attribute" in {
-      tx(<PointSymbolizer file="symbols/lock_gate.png" />) must \("Graphic")
+      tx(<PointSymbolizer file="symbols/lock_gate.png" />) mustXML_== (
+        <PointSymbolizer>
+          <Graphic>
+            <ExternalGraphic>
+              <OnlineResource xlink:type="simple" xlink:href="symbols/lock_gate.png"/>
+              <Format>image/png</Format>
+            </ExternalGraphic>
+          </Graphic>
+        </PointSymbolizer>)
     }
   }
   
@@ -91,15 +105,27 @@ object Mapnik2GeoToolsSpec extends Specification with PendingUntilFixed {
     "not require a 'height' attribute" in {
       val transformed =
         tx(<PolygonPatternSymbolizer file="symbols/glacier.png" />)
-      transformed must \("Fill") \("GraphicFill")
-      transformed must not(\\("Size"))
+      transformed mustXML_== (
+        <PolygonSymbolizer>
+          <Fill>
+            <GraphicFill>
+              <Graphic>
+                <ExternalGraphic>
+                  <OnlineResource xlink:href="symbols/glacier.png"/>
+                  <Format>image/png</Format>
+                </ExternalGraphic>
+              </Graphic>
+            </GraphicFill>
+          </Fill>
+        </PolygonSymbolizer>
+        )
     }
 
     "extract CssParameters from attributes" in {
       val transformed =
         tx(<PolygonSymbolizer fill-opacity=".25" fill="#999999"/>)
 
-      transformed must ==/(
+      transformed mustXML_==(
         <PolygonSymbolizer>
           <Fill>
             <CssParameter name="fill-opacity">.25</CssParameter>
@@ -118,26 +144,45 @@ object Mapnik2GeoToolsSpec extends Specification with PendingUntilFixed {
 
     "not require a 'type' attribute for shield images" in {
       val transformed =
-        tx(<ShieldSymbolizer name="ref" fontset-name="bold-fonts" size="10" fill="#fff" placement="line" file="&symbols;/mot_shield1.png" min_distance="30" spacing="750"/>)
-      transformed must \("Graphic")
+        tx(
+          <ShieldSymbolizer
+            name="ref"
+            fontset-name="bold-fonts"
+            size="10"
+            fill="#fff"
+            placement="line"
+            file="&symbols;/mot_shield1.png"
+            min_distance="30"
+            spacing="750"
+         />)
+
+      (transformed \ "Graphic").head mustXML_== (
+          <Graphic>
+            <ExternalGraphic>
+              <OnlineResource xlink:href="&amp;symbols;/mot_shield1.png"/>
+              <Format>image/png</Format>
+            </ExternalGraphic>
+          </Graphic>
+        )
     }
 
     "keep the <Size> element outside the ExternalGraphic" in {
-      tx(<ShieldSymbolizer file="foo.png" fontset-name="bold-fonts" height="12" width="12"/>) must \\("Graphic").\("Size")
+      (tx(<ShieldSymbolizer file="foo.png" fontset-name="bold-fonts" height="12" width="12"/>) \\ "Graphic" \ "Size").text must_== "12"
     }
 
     "create halos from only a halo-radius property" in {
       val transformed = 
         tx(<TextSymbolizer halo-radius="10" name="name" fontset-name="bold-fonts"/>)
 
-      transformed must \\(
-        <Halo>
-          <Radius><ogc:Literal>10</ogc:Literal></Radius>
-          <Fill>
-            <CssParameter name="fill">#ffffff</CssParameter>
-          </Fill>
-        </Halo>
-      )
+      (transformed \\ ("Halo")).head mustXML_== (
+      <Halo>
+        <Radius>
+          <ogc:Literal>10</ogc:Literal>
+        </Radius>
+        <Fill>
+          <CssParameter name="fill">#ffffff</CssParameter>
+        </Fill>
+      </Halo>)
     }
 
     "support halo-fill in different formats" in {
@@ -145,7 +190,7 @@ object Mapnik2GeoToolsSpec extends Specification with PendingUntilFixed {
         val transformed =
           tx(<TextSymbolizer halo-fill="#fed7a5" name="name" fontset-name="book-fonts" size="8" fill="black" halo-radius="1" placement="line"/>)
 
-        transformed must \("Halo") \(
+        (transformed \\ ("Halo") \\ "Fill").head mustXML_== (
           <Fill>
             <CssParameter name="fill">#fed7a5</CssParameter>
           </Fill>
@@ -156,7 +201,7 @@ object Mapnik2GeoToolsSpec extends Specification with PendingUntilFixed {
         val transformed =
           tx(<TextSymbolizer halo-fill="rgba(10,0,255,0.25)" name="name" fontset-name="bold-fonts" size="12" fill="#2b2b2b" halo-radius="2" dy="0" placement="line" max_char_angle_delta="40" text_convert="toupper"/>)
 
-        transformed must \("Halo") \(
+        (transformed \\ ("Halo") \\ "Fill").head mustXML_== (
           <Fill>
             <CssParameter name="fill">#0a00ff</CssParameter>
             <CssParameter name="fill-opacity">0.25</CssParameter>
@@ -169,7 +214,8 @@ object Mapnik2GeoToolsSpec extends Specification with PendingUntilFixed {
       val transformed =
         tx(<TextSymbolizer dy="-8" fill="rgb(102,102,255)" fontset-name="book-fonts" halo-radius="1" size="8" vertical-alignment="top"/>)
 
-      transformed must \\(
+      println(transformed.mkString)
+      (transformed \ "Fill").head mustXML_== (
         <Fill>
           <CssParameter name="fill">#6666ff</CssParameter>
         </Fill>
@@ -180,7 +226,7 @@ object Mapnik2GeoToolsSpec extends Specification with PendingUntilFixed {
       val transformed =
         tx(<TextSymbolizer fill="rgb(0,0,0)" fontset-name="book-fonts" halo-radius="1" size="8">[name]</TextSymbolizer>)
 
-      transformed must \(
+      (transformed \\ ("Label")).head mustXML_== (
         <Label>
           <ogc:PropertyName>name</ogc:PropertyName>
         </Label>

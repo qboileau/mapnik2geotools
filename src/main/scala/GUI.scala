@@ -4,6 +4,9 @@ import driver._
 import scala.swing._
 import javax.swing
 
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+
 object GUI extends SwingApplication {
 
   import GridBagPanel._
@@ -60,7 +63,7 @@ object GUI extends SwingApplication {
 
     border = new swing.border.TitledBorder("Input")
     enabled = false
-    layout += (
+    layout ++= Seq(
       mapnikFileLabel -> ((0, 0): Constraints),
       mapnikFileField -> ((1, 0): Constraints),
       fileChooserLauncher -> ((2, 0): Constraints)
@@ -73,7 +76,7 @@ object GUI extends SwingApplication {
     val group = new ButtonGroup(local, publish)
 
     border = new swing.border.TitledBorder("Operation")
-    layout += (
+    layout ++= Seq(
       local -> new Constraints {
         grid = (0, 0)
         anchor = Anchor.West
@@ -101,13 +104,13 @@ object GUI extends SwingApplication {
     border = new swing.border.TitledBorder("Local Output")
 
     override def enabled_=(b: Boolean) = {
-      super.enabled = b
+      super.enabled_=(b)
       outputDirLabel.enabled = b
       outputDirField.enabled = b
       fileChooserLauncher.enabled = b
     }
 
-    layout += (
+    layout ++= Seq(
       outputDirLabel -> ((0, 0): Constraints),
       outputDirField -> ((1, 0): Constraints),
       fileChooserLauncher -> ((2, 0): Constraints)
@@ -164,12 +167,12 @@ object GUI extends SwingApplication {
     }
 
     override def enabled_=(b: Boolean) {
-      super.enabled = b
+      super.enabled_=(b)
       fields.foreach(_.enabled = b)
     }
 
     border = new swing.border.TitledBorder("GeoServer")
-    layout += (
+    layout ++= Seq(
       urlLabel -> ((0, 0): Constraints),
       urlField -> ((1, 0): Constraints),
       adminLabel -> ((0, 1): Constraints),
@@ -187,11 +190,11 @@ object GUI extends SwingApplication {
     val button = new Button("Convert!")
 
     override def enabled_=(b: Boolean) = {
-      super.enabled = b
+      super.enabled_=(b)
       button.enabled = b
     }
 
-    layout += (
+    layout ++= Seq(
       new Component {}  -> new Constraints {
         grid = (0, 0)
         weightx = 1
@@ -212,7 +215,7 @@ object GUI extends SwingApplication {
     progress.label = "Converting Mapnik style to GeoServer SLD..."
     progress.indeterminate = true
 
-    val closeButton = Button("Okay")(visible = false)
+    val closeButton = Button("Okay")({ visible = false})
     closeButton.enabled = false
 
     def finish() {
@@ -231,7 +234,7 @@ object GUI extends SwingApplication {
   def startup(args: Array[String]) {
     locally {
       import javax.swing.UIManager.{ getInstalledLookAndFeels, setLookAndFeel }
-      import collection.JavaConversions._
+      import scala.jdk.CollectionConverters._
       for (nimbus <- getInstalledLookAndFeels.find(_.getName == "Nimbus"))
         setLookAndFeel(nimbus.getClassName)
     }
@@ -292,10 +295,10 @@ object GUI extends SwingApplication {
           val reporter = new ProgressReporter(frame)
           reporter.setLocationRelativeTo(frame)
           State.job foreach { job =>
-            actors.Futures.future {
+            Future {
               try
                 job.run()
-              catch { case ex =>
+              catch { case ex: Throwable =>
                 reporter.visible = false
                 val buff = new java.io.StringWriter
                 val writer = new java.io.PrintWriter(buff)
@@ -322,7 +325,7 @@ object GUI extends SwingApplication {
       visible = true
       contents = {
         val grid = new BoxPanel(Orientation.Vertical)
-        grid.contents += (
+        grid.contents ++= Seq(
           input,
           operation,
           output,
